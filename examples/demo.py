@@ -1,6 +1,6 @@
 """A quick demo of oscillation, stimulation, and background noise."""
 import numpy as np
-from spikes import neurons, util, rates
+from fakespikes import neurons, util, rates
 import seaborn as sns; sns.__file__ # pylint
 import matplotlib.pyplot as plt; plt.ion()
 
