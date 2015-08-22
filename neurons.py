@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Simulate PAC"""
 import numpy as np
 from numpy.random import RandomState
 
