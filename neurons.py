@@ -4,7 +4,7 @@ from numpy.random import RandomState
 
 
 class Spikes(object):
-    """A class to simulate statistical models of neural spiking
+    """Simulates statistical models of neural spiking
 
     Params
     ------
