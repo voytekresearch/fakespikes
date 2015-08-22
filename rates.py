@@ -24,13 +24,14 @@ def stim(times, d, scale, seed=None):
         rates.append(d)
 
     rates = np.array(rates)
-    rates[rates < 0] = 0
+    rates[rates < 0] = 0  # Rates must be positive
 
     return rates
 
 
 def constant(times, d):
     """Constant drive, d"""
+    
     return np.repeat(d, len(times))
 
 
