@@ -12,7 +12,7 @@ def to_spiketimes(times, spikes):
     ns, ts = [], []
     for i in xrange(n_steps):
         for j in xrange(n):
-            if spikes[i,j] == 1:
+            if spikes[i, j] == 1:
                 ns.append(j)  # save neuron and
                 ts.append(times[i])  # look up dt time
 
@@ -54,4 +54,3 @@ def isi(d_sp):
         d_isi[k] = np.array(intervals)
 
     return d_isi
-
