@@ -58,7 +58,7 @@ class Spikes(object):
 
         # Create uniform sampling distributions for each neuron
         self.unifs = np.vstack(
-            [self.prng.uniform(0, 1, self.n_steps) for i in xrange(self.n)]
+            [self.prng.uniform(0, 1, self.n_steps) for i in range(self.n)]
         ).transpose()
 
     def _constraints(self, drive):
@@ -72,9 +72,9 @@ class Spikes(object):
 
         # If it spiked at t, delete spikes
         # in the refractory window
-        for t in xrange(spks.shape[0]):
+        for t in range(spks.shape[0]):
             mask = spks[t, :]
-            for t_plus in xrange(lw):
+            for t_plus in range(lw):
                 spks[t_plus, :][mask] = 0
 
         return spks
@@ -97,7 +97,7 @@ class Spikes(object):
         # Poisson method taken from
         # http://www.cns.nyu.edu/~david/handouts/poisson.pdf
         spikes = np.zeros_like(self.unifs, np.int)
-        for j in xrange(self.n):
+        for j in range(self.n):
             mask = self.unifs[:,j] <= ((rates + biases[j]) * self.dt)
             spikes[mask,j] = 1
 

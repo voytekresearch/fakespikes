@@ -10,8 +10,8 @@ def to_spiketimes(times, spikes):
     n = spikes.shape[1]
 
     ns, ts = [], []
-    for i in xrange(n_steps):
-        for j in xrange(n):
+    for i in range(n_steps):
+        for j in range(n):
             if spikes[i,j] == 1:
                 ns.append(j)  # save neuron and
                 ts.append(times[i])  # look up dt time
