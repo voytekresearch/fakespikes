@@ -1,3 +1,1 @@
-import neurons
-import util
-import rates
+__all__ = ['neurons', 'rates', 'util']

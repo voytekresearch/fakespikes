@@ -31,7 +31,5 @@ def stim(times, d, scale, seed=None):
 
 def constant(times, d):
     """Constant drive, d"""
-    
+
     return np.repeat(d, len(times))
-
-

@@ -97,7 +97,7 @@ class Spikes(object):
         # http://www.cns.nyu.edu/~david/handouts/poisson.pdf
         spikes = np.zeros_like(self.unifs, np.int)
         for j in range(self.n):
-            mask = self.unifs[:,j] <= ((rates + biases[j]) * self.dt)
-            spikes[mask,j] = 1
+            mask = self.unifs[:, j] <= ((rates + biases[j]) * self.dt)
+            spikes[mask, j] = 1
 
         return self._refractory(spikes)
