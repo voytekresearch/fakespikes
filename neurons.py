@@ -104,54 +104,31 @@ class Spikes(object):
         return self._refractory(spikes)
 
 
-    def binary(self, rates):
-        if np.any(rates < 1):
-            raise ValueError("rates must be greater then zero")
+    def binary(self, rates, k=3, excitability=0.001):
+        # Justification:
+        # 'Partitioning neural variability'
+        # 'Gamma oscillations of spiking neural populations
+        # enhance signal discrimination.'
+        # 'Binary Spiking in Auditory Cortex'
+        self._constraints(rates)  # does no harm to check twice
 
-        isis = 1.0 / rates
+        ps = rates * excitability
+        ns = np.arange(self.n)
+        self.prng.shuffle(ns)
 
-        # Generate spike times
-        nrns = []
-        spiketimes = []
-        for j in range(self.n):
-            tn = 0.0
-            for isi in isis:
-                tn += isi
-                if tn <= self.t:
-                    spiketimes.append(deepcopy(tn))
-                    nrns.append(j)
-
-        return spiketimes, nrns
-
-
-
-    def binary_poisson(self, rates, bias=1):
-        if np.any(rates < 1):
-            raise ValueError("rates must be greater then zero")
-
-        isis = 1.0 / rates
-
-        # Generate spike times
-        spiketimes = []
-        for j in range(self.n):
-            tn = 0.0
-            for isi in isis:
-                erand = self.prng.exponential(1)
-                tn_plus = isi * (1 - bias) + (bias * isi * erand)
-                tn += tn_plus
-                if tn_plus <= self.dt:
-                    spiketimes_j.append(deepcopy(tn))
-            spiketimes.append(spiketimes_j)
-
-        # and then fit them into dt bins
         spikes = np.zeros_like(self.unifs, np.int)
-        for j in range(self.n):
-            for sj in spiketimes[j]:
-                if sj > self.t:
-                    break
+        for i in xrange(self.n_steps):
+            for j in xrange(self.n):
+                # If bernoilli success, neuron_i_j spikes
+                # as does some of it's randomly selected
+                # neighbors.
+                if self.unifs[i, j] < ps[i]:
+                    spikes[i, j] = 1
 
-                idx = (np.abs(self.times - sj)).argmin() # find closest
-                spikes[idx, j] = 1
+                    no_j = ns[ns != j]
+                    self.prng.shuffle(no_j)
+                    for jn in no_j[0:k]:
+                        spikes[i, jn] = 1
 
         return self._refractory(spikes)
 
