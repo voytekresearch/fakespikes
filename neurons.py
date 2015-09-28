@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from numpy.random import RandomState
+from copy import deepcopy
 
 
 class Spikes(object):
@@ -101,3 +102,57 @@ class Spikes(object):
             spikes[mask, j] = 1
 
         return self._refractory(spikes)
+
+
+    def binary(self, rates):
+        if np.any(rates < 1):
+            raise ValueError("rates must be greater then zero")
+
+        isis = 1.0 / rates
+
+        # Generate spike times
+        nrns = []
+        spiketimes = []
+        for j in range(self.n):
+            tn = 0.0
+            for isi in isis:
+                tn += isi
+                if tn <= self.t:
+                    spiketimes.append(deepcopy(tn))
+                    nrns.append(j)
+
+        return spiketimes, nrns
+
+
+
+    def binary_poisson(self, rates, bias=1):
+        if np.any(rates < 1):
+            raise ValueError("rates must be greater then zero")
+
+        isis = 1.0 / rates
+
+        # Generate spike times
+        spiketimes = []
+        for j in range(self.n):
+            tn = 0.0
+            for isi in isis:
+                erand = self.prng.exponential(1)
+                tn_plus = isi * (1 - bias) + (bias * isi * erand)
+                tn += tn_plus
+                if tn_plus <= self.dt:
+                    spiketimes_j.append(deepcopy(tn))
+            spiketimes.append(spiketimes_j)
+
+        # and then fit them into dt bins
+        spikes = np.zeros_like(self.unifs, np.int)
+        for j in range(self.n):
+            for sj in spiketimes[j]:
+                if sj > self.t:
+                    break
+
+                idx = (np.abs(self.times - sj)).argmin() # find closest
+                spikes[idx, j] = 1
+
+        return self._refractory(spikes)
+
+
