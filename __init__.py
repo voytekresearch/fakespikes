@@ -1,3 +1,6 @@
+__all__ = ['neurons', 'rates', 'util']
+
 import neurons
-import util
 import rates
+import util
+

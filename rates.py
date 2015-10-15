@@ -33,5 +33,3 @@ def constant(times, d):
     """Constant drive, d"""
 
     return np.repeat(d, len(times))
-
-
