@@ -38,7 +38,7 @@ class Spikes(object):
             raise ValueError("n must be greater than 2")
         if dt > 0.001:
             raise ValueError("dt must be less than 0.001 seconds (1 ms)")
-        if np.allclose(refractory % dt, 0, atol=dt):
+        if not np.allclose(refractory % dt, 0, atol=dt):
             raise ValueError("refractory must be integer multiple of dt")
 
         self.n = n
