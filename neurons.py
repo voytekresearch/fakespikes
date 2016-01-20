@@ -38,7 +38,7 @@ class Spikes(object):
             raise ValueError("n must be greater than 2")
         if dt > 0.001:
             raise ValueError("dt must be less than 0.001 seconds (1 ms)")
-        if not np.allclose(refractory % dt, 0, atol=dt):
+        if not np.allclose(refractory / dt, int(refractory / dt)):
             raise ValueError("refractory must be integer multiple of dt")
 
         self.n = n
@@ -50,9 +50,6 @@ class Spikes(object):
         self.n_steps = int(self.t * (1.0 / self.dt))
         self.times = np.linspace(0, self.t, self.n_steps)
         self.private_stdev = private_stdev
-
-        if refractory % self.dt != 0:
-            raise ValueError("refractory must be a integer multiple of dt")
         self.refractory = refractory
 
         # Create uniform sampling distributions for each neuron
