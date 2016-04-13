@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from numpy.random import RandomState
+from fakespikes.util import to_spikes
+from fakespikes.rates import constant
 
 
 class Spikes(object):
@@ -98,3 +100,65 @@ class Spikes(object):
             spikes[mask, j] = 1
 
         return self._refractory(spikes)
+
+
+    def sync_bursts(self, a0, f, k, var=1e-3):
+        """Create synchronous bursts (1 ms variance) of thalamic-ish spike
+
+        Params
+        ------
+        f : numeric
+            Oscillation frequency (Hz)
+        k : numeric
+            Number of neuron to spike at a time
+        """
+
+        if k > self.n:
+            raise ValueError("k is larger than N")
+        if f < 0:
+            raise ValueError("f must be greater then 0")
+        if k < 0:
+            raise ValueError("k must be greater then 0")
+
+        
+        # Locate about where the pulses of spikes will go, at f,
+        wl = 1 / float(f)
+        n_pulses = int(self.t * f)
+        pulses = []
+        t_p = 0
+        for _ in range(n_pulses):
+            t_p += wl
+
+            # Gaurd against negative ts
+            if t_p > (3 * var):
+                pulses.append(t_p)
+
+        # and fill in the pulses with Gaussin distributed spikes.
+        Ns = range(self.n)
+        ts = []
+        ns = []
+        for t in pulses:
+            ts += list(t + self.prng.normal(0, var, k))
+
+            # Assign spikes to random neurons, at most
+            # one spike / neuron
+            self.prng.shuffle(Ns)
+            ns += list(Ns)[0:k]
+
+        ts = np.array(ts)
+        ns = np.array(ns)
+
+        # Just in case any negative time any slipped trough
+        mask = ts > 0
+        ts = ts[mask]
+        ns = ns[mask]
+        spikes = to_spikes(ns, ts, self.t, self.n, self.dt)
+        
+        # Create baseline firing
+        base = self.poisson(constant(self.times, a0))
+        
+        spikes = base + spikes
+        spikes[spikes > 1] = 1
+
+        return spikes
+

@@ -1,9 +1,27 @@
 # -*- coding: utf-8 -*-
-
 """Utilities for reformatting and analyzing spiking data"""
 import numpy as np
 from copy import deepcopy
 from itertools import product
+from scipy import signal
+from scipy.stats.mstats import zscore
+from scipy.signal import medfilt
+from scipy.signal import resample
+
+
+def to_spikes(ns, ts, T, N, dt):
+    if not np.allclose(T / dt, int(T / dt)):
+        raise ValueError("T is not evenly divsible by dt")
+
+    n_steps = int(T * (1.0 / dt))
+    times = np.linspace(0, T, n_steps)
+    spikes = np.zeros((n_steps, N))
+    for i, t in enumerate(ts):
+        n = ns[i]
+        idx = (np.abs(times - t)).argmin()  # find closest
+        spikes[idx, n] += 1
+
+    return spikes
 
 
 def to_spiketimes(times, spikes):
@@ -157,3 +175,154 @@ def isi(ns, ts):
         d_isi[k] = np.array(intervals)
 
     return d_isi
+
+
+def detect_coincidences(ns, ts, tol):
+    ccs = np.zeros_like(ts)
+
+    for i, t in enumerate(ts):
+        cc = np.isclose(t, ts, atol=tol)
+        ccs[i] += (cc.sum() - 1)  # Will always match self
+
+    return ccs
+
+
+def increase_coincidences(ns, ts, k, p, N, prng=None):
+    if prng == None:
+        prng = np.random.RandomState()
+    
+    ts_cc = ts.copy()
+    moved = []
+    for i, t in enumerate(ts):
+        if i in moved:
+            continue
+
+        if p <= prng.rand():
+            # k_p = prng.randint(1, k + 1)
+            k_p = k
+            for j in range(1, k_p + 1):
+                try:
+                    loc = i + j
+                    ts_cc[loc] = t
+                    moved.append(loc)
+                except IndexError:
+                    pass
+
+    return ns, ts_cc
+
+
+def dendritic_lfp(ns, ts, N, T, tau_rise=0.00009, tau_decay=5e-3,
+                         dt=0.001, norm=True):
+    """Simulate LFP by convloving spikes with a double exponential
+    kernel
+
+    Parameters
+    ----------
+    ns : array-list (1d)
+        Neuron codes (integers)
+    ts : array-list (1d, seconds)
+        Spikes times 
+    tau_rise : numeric (default: 0.00009)
+        The rise time of the synapse
+    tau_decay : numeric (default: 0.0015)
+        The decay time of the synapse
+    dt : numeric (default: 0.001)
+        ??
+
+    Note: Assumes spikes is 1 or 2d, and *column
+    oriented*
+    """
+
+    spikes = to_spikes(ns, ts, T, N, dt)
+
+    if spikes.ndim > 2:
+        raise ValueError("spikes must be 1 of 2d")
+    if tau_rise < 0:
+        raise ValueError("tau_rise must be > 0")
+    if tau_decay < 0:
+        raise ValueError("tau_decay must be > 0")
+    if dt < 0:
+        raise ValueError("dt must be > 0")
+
+    # Enforce col orientation if 1d
+    if spikes.ndim == 1:
+        spikes = spikes[:, np.newaxis]
+
+    # 10 x tau_decay (10 half lives) should be enough to span the
+    # interesting parts of g, thei double exp synaptic
+    # We want 10*tau but we have to resample to dt time first
+    n_syn_samples = ((tau_decay * 10) / dt)
+    t0 = np.linspace(0, tau_decay * 10, n_syn_samples)
+
+    # Define the double exp
+    gmax = 1
+    g = gmax * (np.exp(-(t0 / tau_rise)) + np.exp(-(t0 / tau_decay)))
+
+    # make LFP
+    spsum = spikes.astype(np.float).sum(1)
+    # spsum /= spsum.max()
+
+    lfps = np.convolve(spsum, g)[0:spikes.shape[0]]
+
+    if norm:
+        lfps = zscore(lfps)
+
+    return lfps
+
+
+def soma_lfp(ns, ts, N, T, tau=0.002, dt=.001, norm=True):
+    """Simulate LFP (1d) bu convlution with an 'alpha' kernel.
+
+    Parameters
+    ----------
+
+    ns : array-list (1d)
+        Neuron codes (integers)
+    ts : array-list (1d, seconds)
+        Spikes times 
+    tau : numeric (default: 0.001)
+        The alpha estimate time constant
+    dt : numeric (default: 0.001, seconds)
+        Step time 
+    """
+    spikes = to_spikes(ns, ts, T, N, dt)
+
+    if spikes.ndim > 2:
+        raise ValueError("spikes must be 1 of 2d")
+    if tau < 0:
+        raise ValueError("tau must be > 0")
+    if dt < 0:
+        raise ValueError("dt must be > 0")
+
+    # Enforce col orientation if 1d
+    if spikes.ndim == 1:
+        spikes = spikes[:, np.newaxis]
+
+    # 10 x tau (10 half lives) should be enough to span the
+    # interesting parts of g, the alpha function we are
+    # using to convert broadband firing to LFP
+    # a technique we are borrowing from:
+    #
+    # http://www.ncbi.nlm.nih.gov/pubmed/20463210
+    #
+    # then abusing a bit (too much?).
+    #
+    # We want 10*tau but we have to resample to dt time first
+    n_alpha_samples = ((tau*10)/dt)
+    t0 = np.linspace(0, tau*10, n_alpha_samples)
+
+    # Define the alpha (g notation borrow from BV's initial code)
+    gmax = 0.1
+    g = gmax * (t0 / tau) * np.exp(-(t0 - tau) / tau)
+
+    # make LFP
+    spsum = spikes.astype(np.float).sum(1)
+    spsum /= spsum.max()
+
+    lfps = np.convolve(spsum, g)[0:spikes.shape[0]]
+
+    if norm:
+        lfps = zscore(lfps)
+
+    return lfps
+
