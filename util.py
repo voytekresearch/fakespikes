@@ -92,6 +92,159 @@ def bin_times(ts, t_range, dt):
     return bins[1:], binned
 
 
+def coincidence_code(ts, ns, tol):
+    """Define a spike-time coincidence code
+
+    Params
+    ------
+    ts : array-like (1d)
+        Spike times
+    ns : array-like (1d)
+        Neurons  
+    tol : numeric
+        How close two spikes must be to be coincident
+    """
+
+    # The encoded sequence
+    encoded = []
+    ts_e = []
+
+    # The encoding machinery
+    encoding = {}
+    master_code = 0
+
+    for i, t in enumerate(ts):
+        # Find which neurons fired in coincidence
+        # and make them a set
+        m = np.isclose(t, ts, atol=tol)
+        n_set = frozenset(ns[m])
+
+        # If this set isn't known yet use the
+        # master code to encode it
+        try:
+            encoding[n_set]
+        except KeyError:
+            encoding[n_set] = master_code
+            master_code += 1
+
+        # Finally actually encode
+        encoded.append(encoding[n_set])
+        ts_e.append(t)
+
+    # Find and discard any **identical** times
+    # (Note we are not using tol this time)
+    for i, t in enumerate(ts_e):
+        if np.sum(np.isclose(t, ts_e)) > 1:
+            del encoded[i]
+            del ts_e[i]
+
+    return np.asarray(encoded), np.asarray(ts_e), encoding
+
+
+def rate_code(ts, t_range, dt, k=1):
+    """Define a rate code
+
+    Params
+    ------
+    ts : array-like
+        spike times
+    t_range : 2-tuple
+        (Min, Max) values of ts
+    dt : numeric
+        Window size which which to bin
+    k : numeric 
+        The effective resolution of the rate code (Hz)
+
+    Notes
+    -----
+    While the absolute value/units of t, t_range 
+    and dt do not matter, their values must be self
+    consistent.
+    """
+
+    # resample, discretize and encode
+    # convert magnitudes to order of apperance
+    # e.g. [1, 2, 5, 1, 3, 4] becomes
+    #      [1, 2, 3, 1, 4, 5]
+    
+    # 1. bin times
+    t_bins, binned = bin_times(ts, t_range, dt)
+
+    # 2. norm rate ranage
+    max_r = binned.max()
+    n_d = np.int(np.ceil(max_r / k))
+    digitized = np.digitize(binned, np.linspace(0, max_r, n_d))
+
+    # 3. Encode by order of apperance
+    # Define encodes by order of appearance in digitized
+    # This eocnding makes the order of rate changes matter
+    # not the overall amplitude or exact binning details
+    # of the rate matter
+
+    # The encoding machinery
+    master_code = 0
+    encoding = {}
+
+    # The encoded sequence
+    encoded = []
+
+    for d in digitized:
+        # Init is this the first time seeing d
+        try:
+            encoding[d]
+        except KeyError:
+            encoding[d] = master_code
+            master_code += 1
+
+        encoded.append(encoding[d])
+
+    # return np.asarray(encoded), t_bins
+    return np.asarray(encoded), t_bins, encoding
+
+
+def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
+    """Spike triggered average
+
+    Return the spike triggered average or trace, in a window
+    of width dt.
+
+    Params
+    ------
+    ts : array
+        Spike times
+    trace : array
+        The data to average
+    t_range : 2-tuple
+        The (min, max) values to trace
+    dt : numeric
+        The window size
+    srate : numeric
+        The sampling rate of trace
+    """
+    n_bins = int(np.ceil((2 * (dt * srate))))
+    bins = np.linspace(-dt, dt, n_bins)
+
+    n_steps = int(np.ceil(srate * t_range[1]))
+    times = np.linspace(t_range[0], t_range[1], n_steps)
+
+    sta = np.zeros(n_bins)
+    for t, n in zip(ts, ns):
+
+        # Prevent over/underflow
+        if t < dt:
+            continue
+        if t > (t_range[1] - dt):
+            continue
+
+        # Define the window and sum it
+        m = np.logical_and(times >= (t - dt), times <= (t + dt))
+        sta += trace[n, m]  # Avg over neurons at each t
+
+    sta /= ts.size    # divide the sum by n -> the mean.
+
+    return sta, bins
+
+
 def levenshtein(a, b):
     """Calculates the Levenshtein distance between a and b.
 
@@ -177,6 +330,16 @@ def isi(ns, ts):
     return d_isi
 
 
+def spiketimes_to_coincidences(ns, ts, tol):
+    t_cc = []
+    n_cc = []
+
+    for i, t in enumerate(ts):
+        cc = np.isclose(t, ts, atol=tol)
+        t_cc.append()
+        ccs[i] += (cc.sum() - 1)  # Will always match self
+
+
 def detect_coincidences(ns, ts, tol):
     ccs = np.zeros_like(ts)
 
@@ -190,7 +353,7 @@ def detect_coincidences(ns, ts, tol):
 def increase_coincidences(ns, ts, k, p, N, prng=None):
     if prng == None:
         prng = np.random.RandomState()
-    
+
     ts_cc = ts.copy()
     moved = []
     for i, t in enumerate(ts):
@@ -212,7 +375,7 @@ def increase_coincidences(ns, ts, k, p, N, prng=None):
 
 
 def dendritic_lfp(ns, ts, N, T, tau_rise=0.00009, tau_decay=5e-3,
-                         dt=0.001, norm=True):
+                  dt=0.001, norm=True):
     """Simulate LFP by convloving spikes with a double exponential
     kernel
 
@@ -308,8 +471,8 @@ def soma_lfp(ns, ts, N, T, tau=0.002, dt=.001, norm=True):
     # then abusing a bit (too much?).
     #
     # We want 10*tau but we have to resample to dt time first
-    n_alpha_samples = ((tau*10)/dt)
-    t0 = np.linspace(0, tau*10, n_alpha_samples)
+    n_alpha_samples = ((tau * 10) / dt)
+    t0 = np.linspace(0, tau * 10, n_alpha_samples)
 
     # Define the alpha (g notation borrow from BV's initial code)
     gmax = 0.1
@@ -325,4 +488,3 @@ def soma_lfp(ns, ts, N, T, tau=0.002, dt=.001, norm=True):
         lfps = zscore(lfps)
 
     return lfps
-
