@@ -7,6 +7,27 @@ from scipy import signal
 from scipy.stats.mstats import zscore
 from scipy.signal import medfilt
 from scipy.signal import resample
+from scipy.signal import welch
+from scipy.stats import entropy
+
+
+def create_psd(lfp, inrate, outrate=1024):
+    """Calculate PSD from LFP/EEG data."""
+    lfp = np.array(lfp)
+    
+    if inrate != outrate:
+        lfp = signal.resample(lfp, int(lfp.shape[0] * outrate / inrate))
+
+    # Calculate PSD
+    return signal.welch(lfp,
+                        fs=outrate,
+                        window='hanning',
+                        nperseg=outrate,
+                        noverlap=outrate / 2.0,
+                        nfft=None,
+                        detrend='linear',
+                        return_onesided=True,
+                        scaling='density')
 
 
 def to_spikes(ns, ts, T, N, dt):
@@ -243,6 +264,41 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
     sta /= ts.size    # divide the sum by n -> the mean.
 
     return sta, bins
+
+
+def kl_divergence(a, b):
+    """Calculate the K-L divergence between a and b
+    
+    Note: a and b must be two sequences of integers
+    """
+    import pudb
+    a = np.asarray(a)
+    b = np.asarray(b)
+
+    # Find the total set of symbols
+    a_set = set(a)
+    b_set = set(b)
+    ab_set = a_set.union(b_set)
+
+    # Create a lookup table for each symbol in p_a/p_b
+    lookup = {}
+    for i, x in enumerate(ab_set):
+        lookup[x] = i
+
+    # Calculate event probabilities for and then b
+    p_a = np.ones(len(ab_set))
+    for x in a:
+        p_a[lookup[x]] += 1
+    
+    p_b = np.ones(len(ab_set))
+    for x in b:
+        p_b[lookup[x]] += 1
+
+    # Norm counts in probabilities
+    p_a /= a.size  
+    p_b /= b.size
+
+    return entropy(p_a, p_b, base=2)
 
 
 def levenshtein(a, b):
