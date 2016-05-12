@@ -130,15 +130,43 @@ def coincidence_code(ts, ns, tol):
     encoded = []
     ts_e = []
 
+    for i, t in enumerate(ts):
+        # Find which neurons fired in coincidence
+        # and count them. The count is the code.
+        m = np.isclose(t, ts, atol=tol)
+        n_set = np.sum(m)
+
+        encoded.append(n_set)
+        ts_e.append(t)
+
+    return np.asarray(encoded), np.asarray(ts_e)
+
+
+def spike_window_code(ts, ns, dt=1e-3):
+    """Define a spike-time window code
+
+    Params
+    ------
+    ts : array-like (1d)
+        Spike times
+    ns : array-like (1d)
+        Neurons  
+    dt : numeric
+        Window size (seconds)
+    """
+    
+    # The encoded sequences
+    encoded = []
+    ts_e = []
+
     # The encoding machinery
     encoding = {}
     master_code = 0
-
-    for i, t in enumerate(ts):
+    for t in ts:
         # Find which neurons fired in coincidence
         # and make them a set
-        m = np.isclose(t, ts, atol=tol)
-        n_set = frozenset(ns[m])
+        m = np.isclose(t, ts, atol=dt)
+        n_set = frozenset(ts[m])
 
         # If this set isn't known yet use the
         # master code to encode it
@@ -148,16 +176,9 @@ def coincidence_code(ts, ns, tol):
             encoding[n_set] = master_code
             master_code += 1
 
-        # Finally actually encode
+        # Finally do the encode
         encoded.append(encoding[n_set])
         ts_e.append(t)
-
-    # Find and discard any **identical** times
-    # (Note we are not using tol this time)
-    for i, t in enumerate(ts_e):
-        if np.sum(np.isclose(t, ts_e)) > 1:
-            del encoded[i]
-            del ts_e[i]
 
     return np.asarray(encoded), np.asarray(ts_e), encoding
 
@@ -286,6 +307,8 @@ def kl_divergence(a, b):
         lookup[x] = i
 
     # Calculate event probabilities for and then b
+    # To prevent nan/division errors every event
+    # gets at least a 1 count.
     p_a = np.ones(len(ab_set))
     for x in a:
         p_a[lookup[x]] += 1
@@ -294,7 +317,7 @@ def kl_divergence(a, b):
     for x in b:
         p_b[lookup[x]] += 1
 
-    # Norm counts in probabilities
+    # Norm counts into probabilities
     p_a /= a.size  
     p_b /= b.size
 
