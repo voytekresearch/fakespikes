@@ -7,14 +7,14 @@ from scipy import signal
 from scipy.stats.mstats import zscore
 from scipy.signal import medfilt
 from scipy.signal import resample
-from scipy.signal import welch
+from scipy.signal import welch, gaussian
 from scipy.stats import entropy
 
 
 def create_psd(lfp, inrate, outrate=1024):
     """Calculate PSD from LFP/EEG data."""
     lfp = np.array(lfp)
-    
+
     if inrate != outrate:
         lfp = signal.resample(lfp, int(lfp.shape[0] * outrate / inrate))
 
@@ -30,17 +30,43 @@ def create_psd(lfp, inrate, outrate=1024):
                         scaling='density')
 
 
+def select_n(sel, ns, ts):
+    """Select some neurons.
+
+    Params
+    ------
+    sel : list 
+        Which neurons to select
+    ts : array-like (1d)
+        Spike times
+    ns : array-like (1d)
+        Neurons  
+    """
+    if ns.shape != ts.shape:
+        raise ValueError("ns and ts must be the same shape")
+
+    m = np.zeros_like(ts, dtype=np.bool)
+
+    for n in sel:
+        m = np.logical_or(m, n == ns)
+
+    return ns[m], ts[m]
+
+
 def to_spikes(ns, ts, T, N, dt):
+    """Convert spike times to a grid and binary representation"""
+
     if not np.allclose(T / dt, int(T / dt)):
         raise ValueError("T is not evenly divsible by dt")
 
     n_steps = int(T * (1.0 / dt))
     times = np.linspace(0, T, n_steps)
     spikes = np.zeros((n_steps, N))
+
     for i, t in enumerate(ts):
         n = ns[i]
         idx = (np.abs(times - t)).argmin()  # find closest
-        spikes[idx, n] += 1
+        spikes[idx, n - 1] += 1
 
     return spikes
 
@@ -142,6 +168,27 @@ def coincidence_code(ts, ns, tol):
     return np.asarray(encoded), np.asarray(ts_e)
 
 
+def spike_time_code(ts, scale=1000, decimals=3):
+    """Spike time code 
+    
+    Note: ts MUST be in seconds
+
+   Params
+    ------
+    ts : array-like (1d)
+        Spike times
+    ns : array-like (1d)
+        Neurons
+    scale : numeric
+        Amount to scale `ts` by before int conversion
+    """
+
+    scaled = np.round(ts, decimals) * scale
+    encoded = scaled.astype(np.int)
+
+    return encoded
+
+
 def spike_window_code(ts, ns, dt=1e-3):
     """Define a spike-time window code
 
@@ -154,7 +201,7 @@ def spike_window_code(ts, ns, dt=1e-3):
     dt : numeric
         Window size (seconds)
     """
-    
+
     # The encoded sequences
     encoded = []
     ts_e = []
@@ -208,7 +255,7 @@ def rate_code(ts, t_range, dt, k=1):
     # convert magnitudes to order of apperance
     # e.g. [1, 2, 5, 1, 3, 4] becomes
     #      [1, 2, 3, 1, 4, 5]
-    
+
     # 1. bin times
     t_bins, binned = bin_times(ts, t_range, dt)
 
@@ -270,8 +317,13 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
     times = np.linspace(t_range[0], t_range[1], n_steps)
 
     sta = np.zeros(n_bins)
-    for t, n in zip(ts, ns):
 
+    # Sanity: check for empty times or ns 
+    # and return 0s in the sta if needed
+    if (ts.size == 0) or (ns.size == 0):
+        return sta, bins
+
+    for t, n in zip(ts, ns):
         # Prevent over/underflow
         if t < dt:
             continue
@@ -282,7 +334,7 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
         m = np.logical_and(times >= (t - dt), times <= (t + dt))
         sta += trace[n, m]  # Avg over neurons at each t
 
-    sta /= ts.size    # divide the sum by n -> the mean.
+    sta /= ts.size  # divide the sum by n -> the mean.
 
     return sta, bins
 
@@ -312,13 +364,13 @@ def kl_divergence(a, b):
     p_a = np.ones(len(ab_set))
     for x in a:
         p_a[lookup[x]] += 1
-    
+
     p_b = np.ones(len(ab_set))
     for x in b:
         p_b[lookup[x]] += 1
 
     # Norm counts into probabilities
-    p_a /= a.size  
+    p_a /= a.size
     p_b /= b.size
 
     return entropy(p_a, p_b, base=2)
@@ -385,7 +437,7 @@ def fano(ns, ts):
     d_sp = isi(ns, ts)
     d_fano = {}
     for n, v in d_sp.items():
-        d_fano[n] = v.std() ** 2 / v.mean()
+        d_fano[n] = v.std()**2 / v.mean()
 
     return d_fano
 
@@ -453,8 +505,99 @@ def increase_coincidences(ns, ts, k, p, N, prng=None):
     return ns, ts_cc
 
 
-def dendritic_lfp(ns, ts, N, T, tau_rise=0.00009, tau_decay=5e-3,
-                  dt=0.001, norm=True):
+def precision(ns, ts, ns_ref, ts_ref, combine=True):
+    """Analyze spike time precision (jitter)
+    
+    Parameters
+    ----------
+    ns : array-list (1d)
+        Neuron codes 
+    ts : array-list (1d, seconds)
+        Spikes times 
+    ns_ref : array-list (1d)
+        Neuron codes for the reference train
+    ts_ref : array-list (1d, seconds)
+        Spikes times for the reference train
+    """
+
+    prec = []
+    ns_prec = []
+
+    if combine:
+        ns = np.zeros_like(ns)
+        ns_ref = np.zeros_like(ns_ref)
+
+    # isolate units, and reformat
+    ref = to_spikedict(ns_ref, ts_ref)
+    target = to_spikedict(ns, ts)
+
+    # analyze precision
+    for n, r in ref.iteritems():
+        x = target[n]
+        minl = min(len(r), len(x))
+        diffs = np.abs([r[i] - x[i] for i in range(minl)])
+
+        prec.append(np.mean(diffs))
+        ns_prec.append(n)
+
+    # If were are combining return scalars
+    # not sequences
+    if combine:
+        prec = prec[0]
+        ns_prec = ns_prec[0]
+
+    return ns_prec, prec
+
+
+def seperation(ns_1, ts_1, ns_2, ts_2, dt, T=None):
+    """Estimate the distance between two populations, 
+    using the Gaussian smoothed PSTH.
+
+    Parameters
+    ----------
+    ns_1 : array-list (1d)
+        Neuron codes 
+    ts_1 : array-list (1d, seconds)
+        Spikes times
+    ns_2 : array-list (1d)
+        Neuron codes 
+    ts_2 : array-list (1d, seconds)
+        Spikes times
+    dt : numeric
+        Sampling resolution
+    """
+
+    # calculate the PSTH
+    if T is None:
+        T = max(ts_1.max(), ts_2.max())
+    N = max(ns_1.max(), ns_2.max())
+
+    psth1 = to_spikes(ns_1, ts_1, T, N, dt).sum(1)
+    psth2 = to_spikes(ns_2, ts_2, T, N, dt).sum(1)
+
+    # convolve, sigma 5 ms
+    sigma = 5e-3
+    lwin = int((3 * sigma) / dt)
+    g = gaussian(lwin, sigma / dt)
+
+    # calculate the seperation
+    psth1 = np.convolve(psth1, g)[0:psth1.shape[0]]
+    psth2 = np.convolve(psth2, g)[0:psth2.shape[0]]
+    sd1 = np.std(psth1)
+    sd2 = np.std(psth2)
+    sd = np.sqrt((sd1**2) + (sd2**2))
+
+    return np.abs(psth1 - psth2) / sd, psth1, psth2
+
+
+def dendritic_lfp(ns,
+                  ts,
+                  N,
+                  T,
+                  tau_rise=0.00009,
+                  tau_decay=5e-3,
+                  dt=0.001,
+                  norm=True):
     """Simulate LFP by convloving spikes with a double exponential
     kernel
 
