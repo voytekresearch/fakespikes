@@ -3,6 +3,7 @@ and 'naturalistic'.
 """
 from __future__ import division
 import numpy as np
+from scipy import signal
 
 
 def osc(times, a, f):
@@ -46,6 +47,69 @@ def bursts(times, a, f, n_bursts=2, min_a=12):
     rates[m] = bursts
     
     return rates
+
+
+def boxcar(times, a, f, w, dt, offset=0):
+    """Periodic boxcars
+    
+    Parameters
+    ----------
+    times : array
+        Time series (seconds)
+    a : numeric
+        The rate amplitude (Hz)
+    f : numeric
+        Boxcar frequency (Hz)
+    w : numeric
+        Boxcar length (seconds)
+    dt : numeric
+        Sampling rate
+    offset : numeric
+        Number of seconds to roll the phase of the series (seconds)
+    """
+    t = times.max()
+    n_cycle =  int(np.ceil(f * (t - dt))) 
+
+    # Create dirac pulses then
+    l = int(np.ceil((1./f) / dt))
+    pulse = [1] + [0] * l
+    pulses = []                                             
+    for _ in range(n_cycle):
+        pulses.extend(pulse)
+    
+    # change to boxcars
+    pulses = np.asarray(pulses, dtype=np.float)
+    boxcars = pulses.copy()
+
+    wl = int(np.round(w / dt))
+    for i, p in enumerate(pulses):
+        if np.isclose(p, 1):
+            boxcars[i:i+wl] = 1.0
+
+    # Scale height
+    boxcars *= a
+
+    # Change offest, if needed
+    boxcars = np.roll(boxcars, int(np.round(offset / dt)))
+    
+    return boxcars
+
+
+def random_boxcars(times, a, n, min_w, dt):
+    imax = times.shape[0]
+
+    wl = int(np.round(min_w / dt))
+    box = np.ones(wl)
+    
+    idx = np.arange(0, times.shape[0], wl)
+    prng.shuffle(idx)
+    idx = idx[0:n]
+
+    boxcars = np.zeros_like(times)
+    for i in idx:
+        boxcars[i+wl] = box
+    
+    return boxcars
 
 
 def inhibitory(times, a0, a, f, dt, tau_rise=9e-4, tau_decay=20e-3):

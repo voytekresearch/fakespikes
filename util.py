@@ -11,6 +11,13 @@ from scipy.signal import welch, gaussian
 from scipy.stats import entropy
 
 
+def create_times(t, dt):
+    n_steps = int(t * (1.0 / dt))
+    times = np.linspace(0, t, n_steps)
+    
+    return times
+
+
 def create_psd(lfp, inrate, outrate=1024):
     """Calculate PSD from LFP/EEG data."""
     lfp = np.array(lfp)
