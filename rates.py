@@ -27,6 +27,9 @@ def osc2(times, a, f, min_a=12):
 def bursts(times, a, f, n_bursts=2, min_a=12):
     """Short bursts of oscillation"""
 
+    if not n_bursts:
+        return osc2(times, a, f, min_a)
+
     if n_bursts is None:
         return osc2(times, a, f, min_a)
 
