@@ -6,50 +6,87 @@ import numpy as np
 from scipy import signal
 
 
-def osc(times, a, f):
+def osc(times, a, f, phase=0):
     """Sinusoidal oscillation"""
 
-    rates = a + (a / 2.0) * np.sin(times * f * 2 * np.pi)
+    rates = a + (a / 2.0) * np.sin((times + phase) * f * 2 * np.pi)
     rates[rates < 0] = 0  # Rates must be positive
 
     return rates
 
 
-def osc2(times, a, f, min_a=12):
+def osc2(times, a, f, min_a=12, phase=0):
     """Continous bursting-type oscillation"""
 
-    rates = a * np.cos(2 * np.pi * f * times)
+    rates = a * np.cos(2 * np.pi * f * (times + phase))
     rates[rates < min_a] = min_a
 
     return rates
 
 
-def bursts(times, a, f, n_bursts=2, min_a=12):
+def bursts(times, a, f, n_bursts=2, min_a=12, phase=0, offset=0, random=False):
     """Short bursts of oscillation"""
 
-    if not n_bursts:
-        return osc2(times, a, f, min_a)
 
-    if n_bursts is None:
-        return osc2(times, a, f, min_a)
+    if (not n_bursts) or (n_bursts is None):
+        max_shift = int(1 / f / (times[1] - times[0]))
+        rates = osc2(times, a, f, min_a, phase)
+    else:
+        if n_bursts < 1:
+            raise ValueError("Must be at least 1 bursts.")
 
-    # Break up times
-    burst_l = 1 / f
-    
-    m = np.logical_and(times >= burst_l,
-                      times < (burst_l + (burst_l * n_bursts)))
+        # Is offset a range?
+        try:
+            if len(offset) == 2:
+                offset = np.random.uniform(offset[0], offset[1])
+            else:
+                raise ValueError("offset must be a number or a range")
+        except TypeError:
+            pass
 
-    # Build bursts
-    burst = osc2(times[times <= burst_l], a, f)
-    bursts = []
-    for _ in range(n_bursts):
-        bursts.extend(burst)
+        # Break up times
+        burst_l = 1 / f
+        m = np.logical_and(
+                times >= offset, times < (offset + (burst_l * n_bursts)))
 
-    # Add busts to a constant background
-    rates = constant(times, a)
-    rates[m] = bursts
-    
+        max_shift = int(m.sum())
+
+        # Build bursts
+        burst = osc2(times[times <= burst_l], a, f, phase=phase)
+        bursts = []
+        for _ in range(n_bursts):
+            bursts.extend(burst)
+
+        # Add busts to a constant background
+        rates = constant(times, a)
+        rates[m] = bursts[0:m.sum()]
+
+    if random:
+        shift = int(np.random.uniform(0, max_shift))
+        rates = np.roll(rates, shift)
+
     return rates
+
+
+def square_pulse(times, a, t, w, dt):
+    wl = int(np.round(w / dt))
+    
+    pulse = np.zeros_like(times)
+    loc = (np.abs(times - t)).argmin()
+    
+    pulse[loc:loc+wl] = 1
+    pulse *= a
+
+    return pulse
+
+
+def noisy_square_pulse(times, a, t, w, dt, sigma, seed=None):
+    prng = np.random.RandomState(seed)
+
+    pulse = square_pulse(times, a, t, w, dt)
+    pulse += prng.normal(0, sigma, size=pulse.size)
+
+    return pulse
 
 
 def boxcar(times, a, f, w, dt, offset=0):
@@ -94,11 +131,14 @@ def boxcar(times, a, f, w, dt, offset=0):
 
     # Change offest, if needed
     boxcars = np.roll(boxcars, int(np.round(offset / dt)))
-    
-    return boxcars
+   
+    return boxcars[0:times.shape[0]]
 
 
-def random_boxcars(times, a, n, min_w, dt):
+def random_boxcars(times, a, n, min_w, dt, prng=None):
+    if prng is None:
+        prng = np.random.RandomState()
+
     imax = times.shape[0]
 
     wl = int(np.round(min_w / dt))
@@ -110,8 +150,10 @@ def random_boxcars(times, a, n, min_w, dt):
 
     boxcars = np.zeros_like(times)
     for i in idx:
-        boxcars[i+wl] = box
-    
+        boxcars[i:i+wl] = box
+   
+    boxcars *= a
+
     return boxcars
 
 
