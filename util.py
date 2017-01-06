@@ -14,7 +14,7 @@ from scipy.stats import entropy
 def create_times(t, dt):
     n_steps = int(t * (1.0 / dt))
     times = np.linspace(0, t, n_steps)
-    
+
     return times
 
 
@@ -26,15 +26,16 @@ def create_psd(lfp, inrate, outrate=1024):
         lfp = signal.resample(lfp, int(lfp.shape[0] * outrate / inrate))
 
     # Calculate PSD
-    return signal.welch(lfp,
-                        fs=outrate,
-                        window='hanning',
-                        nperseg=outrate,
-                        noverlap=outrate / 2.0,
-                        nfft=None,
-                        detrend='linear',
-                        return_onesided=True,
-                        scaling='density')
+    return signal.welch(
+        lfp,
+        fs=outrate,
+        window='hanning',
+        nperseg=outrate,
+        noverlap=outrate / 2.0,
+        nfft=None,
+        detrend='linear',
+        return_onesided=True,
+        scaling='density')
 
 
 def select_n(sel, ns, ts):
@@ -63,7 +64,7 @@ def select_n(sel, ns, ts):
 def to_spikes(ns, ts, T, N, dt):
     """Convert spike times to a grid and binary representation"""
 
-    if not np.allclose(T / dt, int(T / dt)):
+    if not np.allclose(T / dt, int(np.round(T / dt))):
         raise ValueError("T is not evenly divsible by dt")
 
     n_steps = int(T * (1.0 / dt))
