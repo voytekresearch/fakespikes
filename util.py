@@ -14,7 +14,7 @@ from scipy.stats import entropy
 def create_times(t, dt):
     n_steps = int(t * (1.0 / dt))
     times = np.linspace(0, t, n_steps)
-    
+
     return times
 
 
@@ -26,15 +26,16 @@ def create_psd(lfp, inrate, outrate=1024):
         lfp = signal.resample(lfp, int(lfp.shape[0] * outrate / inrate))
 
     # Calculate PSD
-    return signal.welch(lfp,
-                        fs=outrate,
-                        window='hanning',
-                        nperseg=outrate,
-                        noverlap=outrate / 10.0,
-                        nfft=None,
-                        detrend='linear',
-                        return_onesided=True,
-                        scaling='density')
+    return signal.welch(
+        lfp,
+        fs=outrate,
+        window='hanning',
+        nperseg=outrate,
+        noverlap=outrate / 2.0,
+        nfft=None,
+        detrend='linear',
+        return_onesided=True,
+        scaling='density')
 
 
 def select_n(sel, ns, ts):
@@ -63,7 +64,7 @@ def select_n(sel, ns, ts):
 def to_spikes(ns, ts, T, N, dt):
     """Convert spike times to a grid and binary representation"""
 
-    if not np.allclose(T / dt, int(T / dt)):
+    if not np.allclose(T / dt, int(np.round(T / dt))):
         raise ValueError("T is not evenly divsible by dt")
 
     n_steps = int(T * (1.0 / dt))
@@ -351,7 +352,6 @@ def kl_divergence(a, b):
     
     Note: a and b must be two sequences of integers
     """
-    import pudb
     a = np.asarray(a)
     b = np.asarray(b)
 
@@ -604,8 +604,9 @@ def dendritic_kernel(tau_rise, tau_decay, dt, gmax=1):
     n_syn_samples = ((tau_decay * 10) / dt)
     t0 = np.linspace(0, tau_decay * 10, n_syn_samples)
 
-    tpeak = tau_decay * tau_rise/(tau_decay - tau_rise) * np.log(tau_decay / tau_rise)
-    normf = 1 / (-np.exp(-tpeak / tau_rise) + np.exp(-tpeak / tau_decay))    
+    tpeak = tau_decay * tau_rise / (tau_decay - tau_rise) * np.log(tau_decay /
+                                                                   tau_rise)
+    normf = 1 / (-np.exp(-tpeak / tau_rise) + np.exp(-tpeak / tau_decay))
     g = (-np.exp(-t0 / tau_rise) + np.exp(-t0 / tau_decay)) * normf
     g *= gmax
 
