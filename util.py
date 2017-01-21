@@ -30,7 +30,7 @@ def create_psd(lfp, inrate, outrate=1024):
                         fs=outrate,
                         window='hanning',
                         nperseg=outrate,
-                        noverlap=outrate / 2.0,
+                        noverlap=outrate / 10.0,
                         nfft=None,
                         detrend='linear',
                         return_onesided=True,
@@ -597,12 +597,28 @@ def seperation(ns_1, ts_1, ns_2, ts_2, dt, T=None):
     return np.abs(psth1 - psth2) / sd, psth1, psth2
 
 
+def dendritic_kernel(tau_rise, tau_decay, dt, gmax=1):
+    """Simulate a PSP, with a double exponential."""
+
+    # 10 half lives is enough to capture the response...
+    n_syn_samples = ((tau_decay * 10) / dt)
+    t0 = np.linspace(0, tau_decay * 10, n_syn_samples)
+
+    tpeak = tau_decay * tau_rise/(tau_decay - tau_rise) * np.log(tau_decay / tau_rise)
+    normf = 1 / (-np.exp(-tpeak / tau_rise) + np.exp(-tpeak / tau_decay))    
+    g = (-np.exp(-t0 / tau_rise) + np.exp(-t0 / tau_decay)) * normf
+    g *= gmax
+
+    return g
+
+
 def dendritic_lfp(ns,
                   ts,
                   N,
                   T,
                   tau_rise=0.00009,
                   tau_decay=5e-3,
+                  gmax=1,
                   dt=0.001,
                   norm=True):
     """Simulate LFP by convloving spikes with a double exponential
@@ -614,12 +630,18 @@ def dendritic_lfp(ns,
         Neuron codes (integers)
     ts : array-list (1d, seconds)
         Spikes times 
+    N : numeric
+        Total number of neurons
+    T : number
+        Total length of firing
     tau_rise : numeric (default: 0.00009)
         The rise time of the synapse
     tau_decay : numeric (default: 0.0015)
         The decay time of the synapse
     dt : numeric (default: 0.001)
-        ??
+        Time resolution (in seconds)
+    gmax : numeric
+        PSP max height
 
     Note: Assumes spikes is 1 or 2d, and *column
     oriented*
@@ -640,20 +662,9 @@ def dendritic_lfp(ns,
     if spikes.ndim == 1:
         spikes = spikes[:, np.newaxis]
 
-    # 10 x tau_decay (10 half lives) should be enough to span the
-    # interesting parts of g, thei double exp synaptic
-    # We want 10*tau but we have to resample to dt time first
-    n_syn_samples = ((tau_decay * 10) / dt)
-    t0 = np.linspace(0, tau_decay * 10, n_syn_samples)
-
-    # Define the double exp
-    gmax = 1
-    g = gmax * (np.exp(-(t0 / tau_rise)) + np.exp(-(t0 / tau_decay)))
-
     # make LFP
+    g = dendritic_kernel(tau_rise, tau_decay, dt, gmax)
     spsum = spikes.astype(np.float).sum(1)
-    # spsum /= spsum.max()
-
     lfps = np.convolve(spsum, g)[0:spikes.shape[0]]
 
     if norm:

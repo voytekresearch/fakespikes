@@ -6,6 +6,13 @@ import numpy as np
 from scipy import signal
 
 
+def create_times(t, dt):
+    n_steps = int(t * (1.0 / dt))
+    times = np.linspace(0, t, n_steps)
+    
+    return times
+
+
 def osc(times, a, f, phase=0):
     """Sinusoidal oscillation"""
 
@@ -38,6 +45,11 @@ def bursts(times, a, f, n_bursts=2, min_a=12, phase=0, offset=0, random=False):
         # Is offset a range?
         try:
             if len(offset) == 2:
+                if random:
+                    raise ValueError("If an offset range is given random" 
+                            " must be set to False. There" 
+                            " is an unpredictable interaction between them.")
+
                 offset = np.random.uniform(offset[0], offset[1])
             else:
                 raise ValueError("offset must be a number or a range")
@@ -68,7 +80,7 @@ def bursts(times, a, f, n_bursts=2, min_a=12, phase=0, offset=0, random=False):
     return rates
 
 
-def square_pulse(times, a, t, w, dt):
+def square_pulse(times, a, t, w, dt, min_a=12):
     wl = int(np.round(w / dt))
     
     pulse = np.zeros_like(times)
@@ -77,13 +89,15 @@ def square_pulse(times, a, t, w, dt):
     pulse[loc:loc+wl] = 1
     pulse *= a
 
+    pulse[pulse < min_a] = min_a
+
     return pulse
 
 
-def noisy_square_pulse(times, a, t, w, dt, sigma, seed=None):
+def noisy_square_pulse(times, a, t, w, dt, sigma, min_a=12, seed=None):
     prng = np.random.RandomState(seed)
 
-    pulse = square_pulse(times, a, t, w, dt)
+    pulse = square_pulse(times, a, t, w, dt, min_a)
     pulse += prng.normal(0, sigma, size=pulse.size)
 
     return pulse
@@ -219,7 +233,7 @@ def excitatory(times, a0, a, f, dt, tau_rise=9e-4, tau_decay=20e-3):
     return rates
 
 
-def stim(times, d, scale, seed=None):
+def stim(times, d, scale, seed=None, min_rate=6):
     """Naturalistic bias (via diffusion model)"""
 
     normal = np.random.normal
@@ -233,12 +247,22 @@ def stim(times, d, scale, seed=None):
         rates.append(d)
 
     rates = np.array(rates)
-    rates[rates < 0] = 0  # Rates must be positive
+    rates[rates <= min_rate] = min_rate # Rates must be positive
 
     return rates
 
 
 def constant(times, d):
     """Constant drive, d"""
+    
+    return np.repeat(float(d), len(times))
 
-    return np.repeat(d, len(times))
+
+def noisy_constant(times, d, sigma):
+    """Constant drive, d, with white noise."""
+
+    rates = constant(times, d)
+    rates += np.random.normal(0, sigma, size=times.shape[0])
+
+    return rates
+
