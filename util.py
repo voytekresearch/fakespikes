@@ -103,7 +103,9 @@ def to_spikedict(ns, ts):
         try:
             d_sp[n].append(t)
         except KeyError:
-            d_sp[n] = [t, ]
+            d_sp[n] = [
+                t,
+            ]
 
     for k in d_sp.keys():
         d_sp[k] = np.array(d_sp[k])
@@ -345,6 +347,56 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
     sta /= ts.size  # divide the sum by n -> the mean.
 
     return sta, bins
+
+
+def _countent(p):
+    mp = np.ma.array(p, copy=False, mask=(p == 0), fill_value=0.0)
+    return (p * np.log(mp)).sum(axis=0)
+
+
+def mi(X, Y):
+    """Discrete mutual information (no bias correction)
+
+    Note: Only supports 1d inputs, and integer values.
+    """
+
+    if (not np.issubdtype(X.dtype, np.int)) or (
+            not np.issubdtype(Y.dtype, int)):
+        raise ValueError, "Input should have integer dtype"
+    if (len(X.shape) > 1) or (len(Y.shape) > 1):
+        raise ValueError, "Only 1D inputs supported"
+
+    # Sizes
+    Nx = len(set(X))
+    Ny = len(set(Y))
+
+    Nt = Nx + Ny
+    logNt = np.log(Nt)
+    Ntr = np.float(Nt)
+
+    # Init p(.)
+    Px = np.zeros(Nx)
+    Py = np.zeros(Ny)
+    Pxy = np.zeros(Nx * Ny)
+
+    # Est p(.)
+    for i in range(Nt):
+        Px[X[i]] += 1
+        Py[Y[i]] += 1
+
+        idx = (X[i] * Ny) + Y[i]
+        Pxy[idx] += 1
+
+    # Est H
+    HX = logNt - (_countent(Px) / Ntr)
+    HY = logNt - (_countent(Py) / Ntr)
+    HXY = logNt - (_countent(Pxy) / Ntr)
+
+    # MI
+    I = HX + HY - HXY
+    I = I / np.log(2.0)
+
+    return I
 
 
 def kl_divergence(a, b):
