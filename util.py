@@ -350,8 +350,11 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
 
 
 def _countent(p):
-    mp = np.ma.array(p, copy=False, mask=np.isclose(p, 0.0), fill_value=0.0)
-    return np.sum(p * np.log(mp), axis=0)
+    # Drop zeros
+    p = np.asarray(p)
+    m = np.isclose(p, 0.0)
+
+    return np.sum(p[m] * np.log(p[m]), axis=0)
 
 
 def mi(X, Y):
