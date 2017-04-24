@@ -38,7 +38,7 @@ def osc2(times, a, f, min_a=12, phase=0):
     # Truncate negative half as a crude sim of spike bursts
     rates[rates < 0] = 0
 
-    return renormalize(rates, (0, 1), (a, min_a))
+    return renormalize(rates, (0, 1), (min_a, a))
 
 
 def bursts(times, a, f, n_bursts=2, min_a=12, phase=0, offset=0, random=False):
