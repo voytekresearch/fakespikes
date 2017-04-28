@@ -349,12 +349,53 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
     return sta, bins
 
 
-def _countent(p):
-    # Drop zeros
-    p = np.asarray(p)
-    m = p > 0.0
+def entopy(X):
+    """Entropy for a list of symbols, X."""
 
-    return np.sum(p[m] * np.log(p[m]), axis=0)
+    if X.ndim != 1:
+        raise ValueError("X must be 1d.")
+
+    # Init
+    X = np.asarray(X)
+
+    # Est P(.) for each symbol in X
+    probs = []
+    for c1 in set(X):
+        probs.append(np.mean(c1 == X))
+    probs = np.asarray(probs)
+
+    probs = probs[probs > 0]
+
+    return -np.sum(probs * np.log2(probs))
+
+
+def cond_entropy(X, Y):
+    """Conditional entropy for lists of symbols, X and Y."""
+
+    if X.ndim != 1:
+        raise ValueError("X must be 1d.")
+
+    if Y.ndim != 1:
+        raise ValueError("Y must be 1d.")
+
+    # Init
+    X = np.asarray(X)
+    Y = np.asarray(Y)
+
+    # Est P(.) for each symbol in X
+    probs = []
+    for c1 in set(X):
+        for c2 in set(Y):
+            probs.append(np.mean(np.logical_and(X == c1, Y == c2)))
+    probs = np.asarray(probs)
+
+    if np.isnan(probs).sum() > 0:
+        print(probs)
+        raise ValueError("p est if very off")
+
+    probs = probs[probs > 0]
+
+    return -np.sum(probs * np.log2(probs))
 
 
 def mi(X, Y):
@@ -369,37 +410,7 @@ def mi(X, Y):
     if (len(X.shape) > 1) or (len(Y.shape) > 1):
         raise ValueError, "Only 1D inputs supported"
 
-    # Sizes
-    Nx = len(set(X))
-    Ny = len(set(Y))
-
-    Nt = Nx + Ny
-    logNt = np.log(Nt)
-    Ntr = np.float(Nt)
-
-    # Init p(.)
-    Px = np.zeros(Nx)
-    Py = np.zeros(Ny)
-    Pxy = np.zeros(Nx * Ny)
-
-    # Est p(.)
-    for i in range(Nt):
-        Px[X[i]] += 1
-        Py[Y[i]] += 1
-
-        idx = (X[i] * Ny) + Y[i]
-        Pxy[idx] += 1
-
-    # Est H
-    HX = logNt - (_countent(Px) / Ntr)
-    HY = logNt - (_countent(Py) / Ntr)
-    HXY = logNt - (_countent(Pxy) / Ntr)
-
-    # MI
-    I = HX + HY - HXY
-    I = I / np.log(2.0)
-
-    return I
+    return entopy(X) + entopy(Y) - cond_entropy(X, Y)
 
 
 def kl_divergence(a, b):
