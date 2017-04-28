@@ -8,7 +8,7 @@ from scipy.stats.mstats import zscore
 from scipy.signal import medfilt
 from scipy.signal import resample
 from scipy.signal import welch, gaussian
-from scipy.stats import entropy
+from scipy.stats import entropy as scientropy
 
 
 def create_times(t, dt):
@@ -446,7 +446,7 @@ def kl_divergence(a, b):
     p_a /= a.size
     p_b /= b.size
 
-    return entropy(p_a, p_b, base=2)
+    return scientropy(p_a, p_b, base=2)
 
 
 def levenshtein(a, b):
