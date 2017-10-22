@@ -199,7 +199,7 @@ def spike_time_code(ts, scale=1000, decimals=3):
     return encoded
 
 
-def spike_window_code(ts, ns, dt=1e-3):
+def spike_window_code(ts, ns, n_digits=3):
     """Define a spike-time window code
 
     Params
@@ -208,9 +208,17 @@ def spike_window_code(ts, ns, dt=1e-3):
         Spike times
     ns : array-like (1d)
         Neurons  
-    dt : numeric
-        Window size (seconds)
+    n_digits : int
+        Number of significant digits
+        used to define spike-times
+        in a window around each t in
+        `ts`
     """
+
+    # n_digits also define 
+    # the width of the window
+    n_digits = int(n_digits)
+    w = 1 / (10.0**n_digits)
 
     # The encoded sequences
     encoded = []
@@ -222,8 +230,8 @@ def spike_window_code(ts, ns, dt=1e-3):
     for t in ts:
         # Find which neurons fired in coincidence
         # and make them a set
-        m = np.isclose(t, ts, atol=dt)
-        n_set = frozenset(ts[m])
+        m = np.isclose(t, ts, atol=w)
+        n_set = frozenset(np.round(ts[m], n_digits))
 
         # If this set isn't known yet use the
         # master code to encode it
@@ -235,9 +243,8 @@ def spike_window_code(ts, ns, dt=1e-3):
 
         # Finally do the encode
         encoded.append(encoding[n_set])
-        ts_e.append(t)
 
-    return np.asarray(encoded), np.asarray(ts_e), encoding
+    return np.asarray(encoded), encoding
 
 
 def rate_code(ts, t_range, dt, k=1):
