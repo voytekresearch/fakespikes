@@ -199,7 +199,7 @@ def spike_time_code(ts, scale=1000, decimals=3):
     return encoded
 
 
-def spike_window_code(ts, ns, n_digits=3):
+def spike_window_code(ts, ns, w=1e-2, decimals=3):
     """Define a spike-time window code
 
     Params
@@ -208,6 +208,8 @@ def spike_window_code(ts, ns, n_digits=3):
         Spike times
     ns : array-like (1d)
         Neurons  
+    w : numeric (seconds)
+        Window size
     n_digits : int
         Number of significant digits
         used to define spike-times
@@ -215,12 +217,8 @@ def spike_window_code(ts, ns, n_digits=3):
         `ts`
     """
 
-    # n_digits also define 
-    # the width of the window
-    n_digits = int(n_digits)
-    w = 1 / (10.0**n_digits)
-
     # The encoded sequences
+    decimals = int(decimals)
     encoded = []
     ts_e = []
 
@@ -231,7 +229,7 @@ def spike_window_code(ts, ns, n_digits=3):
         # Find which neurons fired in coincidence
         # and make them a set
         m = np.isclose(t, ts, atol=w)
-        n_set = frozenset(np.round(ts[m], n_digits))
+        n_set = frozenset(np.round(ts[m], decimals))
 
         # If this set isn't known yet use the
         # master code to encode it
@@ -354,6 +352,51 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
     sta /= ts.size  # divide the sum by n -> the mean.
 
     return sta, bins
+
+
+def estimate_communication(times,
+                           ns,
+                           ts,
+                           window,
+                           coincidence_t=1e-3,
+                           coincidence_n=20,
+                           return_all=False,
+                           time_step=1e-4):
+
+    # Define overall analysis window 
+    t0 = window[0]
+    tn = window[1]
+    if tn + coincidence_t > times.max():
+        raise ValueError("Final window must be less than max value in times")
+
+    m = np.logical_and(t0 <= ts, ts <= tn)
+    ts = ts[m]
+    ns = ns[m]
+
+    # Calculate C for every possible coincidence (CC) window, for all time
+    Cs = []
+    for t in times:
+        # Get CC window
+        cc0 = t
+        ccn = t + coincidence_t
+        m = np.logical_and(cc0 <= ts, ts <= ccn)
+
+        # Count spikes in the window
+        C_t = 0
+        if ts[m].size > 0:
+            n_spikes = ts[m].size
+            C_t = min(n_spikes / coincidence_n, 1.0)
+
+        Cs.append(C_t)
+
+    # Find avg C
+    C = np.mean(Cs)
+    out = C
+
+    if return_all:
+        out = (C, Cs)
+
+    return out
 
 
 def entopy(X):
