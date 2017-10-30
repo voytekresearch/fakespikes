@@ -390,7 +390,7 @@ def estimate_communication(times,
         Cs.append(C_t)
 
     # Find avg C
-    C = np.mean(Cs)
+    C = np.max(Cs)
     out = C
 
     if return_all:
@@ -649,6 +649,17 @@ def precision(ns, ts, ns_ref, ts_ref, combine=True):
     if combine:
         ns = np.zeros_like(ns)
         ns_ref = np.zeros_like(ns_ref)
+
+    # If these are no input sizes,
+    # return huge nonsensical numbers
+    if ns.size == 0:
+        ns_prec = ns_ref
+        prec = np.ones_like(ns_ref) * np.inf
+        if combine:
+            prec = prec[0]
+            ns_prec = ns_prec[0]
+
+        return ns_prec, prec
 
     # isolate units, and reformat
     ref = to_spikedict(ns_ref, ts_ref)
