@@ -333,7 +333,7 @@ def spike_triggered_average(ts, ns, trace, t_range, dt, srate):
 
     sta = np.zeros(n_bins)
 
-    # Sanity: check for empty times or ns 
+    # Sanity: check for empty times or ns
     # and return 0s in the sta if needed
     if (ts.size == 0) or (ns.size == 0):
         return sta, bins
@@ -363,7 +363,7 @@ def estimate_communication(times,
                            return_all=False,
                            time_step=1e-4):
 
-    # Define overall analysis window 
+    # Define overall analysis window
     t0 = window[0]
     tn = window[1]
     if tn + coincidence_t > times.max():
@@ -454,11 +454,11 @@ def mi(X, Y):
     Note: Only supports 1d inputs, and integer values.
     """
 
-    if (not np.issubdtype(X.dtype, np.int)) or (
-            not np.issubdtype(Y.dtype, int)):
-        raise ValueError, "Input should have integer dtype"
+    if (not np.issubdtype(X.dtype, np.int)) or (not np.issubdtype(
+            Y.dtype, int)):
+        raise ValueError("Input should have integer dtype")
     if (len(X.shape) > 1) or (len(Y.shape) > 1):
-        raise ValueError, "Only 1D inputs supported"
+        raise ValueError("Only 1D inputs supported")
 
     return entopy(X) + entopy(Y) - cond_entropy(X, Y)
 
@@ -720,8 +720,8 @@ def dendritic_kernel(tau_rise, tau_decay, dt, gmax=1):
     n_syn_samples = ((tau_decay * 10) / dt)
     t0 = np.linspace(0, tau_decay * 10, n_syn_samples)
 
-    tpeak = tau_decay * tau_rise / (tau_decay - tau_rise) * np.log(tau_decay /
-                                                                   tau_rise)
+    tpeak = tau_decay * tau_rise / (
+        tau_decay - tau_rise) * np.log(tau_decay / tau_rise)
     normf = 1 / (-np.exp(-tpeak / tau_rise) + np.exp(-tpeak / tau_decay))
     g = (-np.exp(-t0 / tau_rise) + np.exp(-t0 / tau_decay)) * normf
     g *= gmax

@@ -1,6 +1,5 @@
 __all__ = ['neurons', 'rates', 'util']
 
-import neurons
-import rates
-import util
-
+from fakespikes import neurons
+from fakespikes import rates
+from fakespikes import util
