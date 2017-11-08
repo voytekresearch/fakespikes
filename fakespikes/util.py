@@ -385,7 +385,7 @@ def estimate_communication(times,
         C_t = 0
         if ts[m].size > 0:
             n_spikes = ts[m].size
-            C_t = min(n_spikes / coincidence_n, 1.0)
+            C_t = max(n_spikes - coincidence_n, 0) / coincidence_n
 
         Cs.append(C_t)
 
@@ -646,20 +646,10 @@ def precision(ns, ts, ns_ref, ts_ref, combine=True):
     prec = []
     ns_prec = []
 
+    # Join all ns, into the '0' key?
     if combine:
         ns = np.zeros_like(ns)
         ns_ref = np.zeros_like(ns_ref)
-
-    # If these are no input sizes,
-    # return huge nonsensical numbers
-    if ns.size == 0:
-        ns_prec = ns_ref
-        prec = np.ones_like(ns_ref) * np.inf
-        if combine:
-            prec = prec[0]
-            ns_prec = ns_prec[0]
-
-        return ns_prec, prec
 
     # isolate units, and reformat
     ref = to_spikedict(ns_ref, ts_ref)
@@ -667,7 +657,11 @@ def precision(ns, ts, ns_ref, ts_ref, combine=True):
 
     # analyze precision
     for n, r in ref.iteritems():
-        x = target[n]
+        try:
+            x = target[n]
+        except KeyError:
+            x = np.zeros_like(r)
+
         minl = min(len(r), len(x))
         diffs = np.abs([r[i] - x[i] for i in range(minl)])
 
