@@ -535,6 +535,11 @@ def kappa(ns1, ts1, ns2, ts2, t_range, dt):
     16(20), pp.6402–6413.
     """
 
+    if len(ts1) == 0:
+        return 0.0
+    if len(ts2) == 0:
+        return 0.0
+
     d_1 = to_spikedict(ns1, ts1)
     d_2 = to_spikedict(ns2, ts2)
 
